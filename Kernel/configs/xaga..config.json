@@ -13,16 +13,6 @@
         "repo": "https://gitlab.com/ThankYouMario/android_prebuilts_clang-standalone/",
         "branch": "14",
         "binaryEnv": ["bin"]
-      },
-      {
-        "name": "gcc64",
-        "url": "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/main.tar.gz",
-        "binaryEnv": ["bin"]
-      },
-      {
-        "name": "gcc32",
-        "url": "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/main.tar.gz",
-        "binaryEnv": ["bin"]
       }
     ],
     "enableCcache": true,
@@ -31,8 +21,8 @@
       "CC": "clang",
       "externalCommands": {
         "CLANG_TRIPLE": "aarch64-linux-gnu-",
-        "CROSS_COMPILE": "aarch64-linux-android-",
-        "CROSS_COMPILE_ARM32": "arm-linux-androideabi-",
+        "CROSS_COMPILE": "aarch64-linux-gnu-",
+        "CROSS_COMPILE_ARM32": "arm-linux-gnueabi-",
         "LD": "ld.lld",
         "AR": "llvm-ar",
         "NM": "llvm-nm",
@@ -41,9 +31,6 @@
         "READELF": "llvm-readelf",
         "OBJSIZE": "llvm-size",
         "STRIP": "llvm-strip",
-        "LDGOLD": "aarch64-linux-gnu-ld.gold",
-        "LLVM_AR": "llvm-ar",
-        "LLVM_DIS": "llvm-dis",
         "CONFIG_THINLTO": "y"
       }
     },
