@@ -11,17 +11,17 @@
       {
         "name": "clang",
         "repo": "https://gitlab.com/ThankYouMario/android_prebuilts_clang-standalone/",
-        "branch": "14",  // 更新到 Clang 14 以支持 Android 15
+        "branch": "14",
         "binaryEnv": ["bin"]
       },
       {
         "name": "gcc64",
-        "url": "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-13.0.0_r82.tar.gz",  // 使用 Android 13 的 GCC
+        "url": "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-13.0.0_r82.tar.gz",
         "binaryEnv": ["bin"]
       },
       {
-        "name": "gcc32", 
-        "url": "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-13.0.0_r82.tar.gz",  // 32位 GCC
+        "name": "gcc32",
+        "url": "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-13.0.0_r82.tar.gz",
         "binaryEnv": ["bin"]
       }
     ],
@@ -44,7 +44,7 @@
         "LDGOLD": "aarch64-linux-gnu-ld.gold",
         "LLVM_AR": "llvm-ar",
         "LLVM_DIS": "llvm-dis",
-        "CONFIG_THINLTO": "y"  // 修改为 y 启用 LTO
+        "CONFIG_THINLTO": "y"
       }
     },
     "AnyKernel3": {
