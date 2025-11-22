@@ -2,8 +2,8 @@
   {
     "kernelSource": {
       "name": "xaga-android15",
-      "repo": "https://github.com/MiCode/Xiaomi_Kernel_OpenSource",
-      "branch": "xaga-s-oss",
+      "repo": "https://github.com/zhang-ruixuan/xiaomi_xaga_kernel",
+      "branch": "mglru",
       "device": "xaga",
       "defconfig": "xaga_defconfig"
     },
