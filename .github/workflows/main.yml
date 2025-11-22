@@ -16,7 +16,7 @@ jobs:
       CONFIGS: ${{ steps.generate-matrix.outputs.CONFIGS }}
       BUILD_DATE: ${{ steps.generate-builddate.outputs.BUILDDATE }}
     steps:
-      # This action checks-out your CONFIGSitory under $GITHUB_WORKSPACE, so your workflow can access it.
+      # This action checks-out your repository under $GITHUB_WORKSPACE, so your workflow can access it.
       - name: 😄 Checkout
         uses: actions/checkout@v4
 
@@ -24,6 +24,17 @@ jobs:
       - name: 😆 Generate Matrix
         id: generate-matrix
         run: |
+          echo "🔍 Validating JSON files..."
+          for file in Kernel/configs/*.config.json; do
+            if [ -f "$file" ]; then
+              echo "Checking $file"
+              if ! jq empty "$file" 2>/dev/null; then
+                echo "❌ Invalid JSON in $file"
+                exit 1
+              fi
+            fi
+          done
+          
           echo "CONFIGS<<EOF" >> $GITHUB_OUTPUT
           jq -s '[.[][]]' Kernel/configs/*.config.json >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -80,7 +91,7 @@ jobs:
         with:
           swap-size-gb: 10
 
-      # This action checks-out your CONFIGSitory under $GITHUB_WORKSPACE, so your workflow can access it.
+      # This action checks-out your repository under $GITHUB_WORKSPACE, so your workflow can access it.
       - name: 😄 Checkout
         uses: actions/checkout@v4
 
@@ -140,6 +151,40 @@ jobs:
           git clone --recursive --depth=1 -j $(nproc) --branch ${{ env.KERNEL_BRANCH }} ${{ env.KERNEL_REPO }} ${{ env.KERNEL_NAME }}
           # tree ${{ env.KERNEL_NAME }}
 
+      - name: 🔧 Fix kernel configuration issues
+        working-directory: ${{ env.KERNEL_NAME }}
+        run: |
+          echo "🔧 Fixing kernel configuration issues..."
+          
+          # 修复 drivers/Kconfig 中的 mihw 引用
+          if [ -f "drivers/Kconfig" ]; then
+            if grep -q "mihw" "drivers/Kconfig"; then
+              # 备份原始文件
+              cp "drivers/Kconfig" "drivers/Kconfig.backup"
+              # 注释掉包含 mihw 的行
+              sed -i '/mihw/s/^/# /' "drivers/Kconfig"
+              echo "✅ Commented out mihw references in drivers/Kconfig"
+            else
+              echo "ℹ️ No mihw references found in drivers/Kconfig"
+            fi
+          else
+            echo "⚠️ drivers/Kconfig not found"
+          fi
+          
+          # 修复 defconfig 中的 mihw 配置
+          if [ -f "arch/arm64/configs/${{ env.KERNEL_DEFCONFIG_PATH }}" ]; then
+            # 备份原始配置
+            cp "arch/arm64/configs/${{ env.KERNEL_DEFCONFIG_PATH }}" "arch/arm64/configs/${{ env.KERNEL_DEFCONFIG_PATH }}.backup"
+            # 移除 mihw 相关配置
+            sed -i '/CONFIG_MIHW/d' "arch/arm64/configs/${{ env.KERNEL_DEFCONFIG_PATH }}"
+            sed -i '/MIHW/d' "arch/arm64/configs/${{ env.KERNEL_DEFCONFIG_PATH }}"
+            echo "✅ Removed MIHW configurations from defconfig"
+          else
+            echo "⚠️ Defconfig file not found: arch/arm64/configs/${{ env.KERNEL_DEFCONFIG_PATH }}"
+          fi
+          
+          echo "✅ Kernel configuration issues fixed"
+
       - name: 💫 Get toolchains
         env:
           toolchains: "${{ toJSON(matrix.CONFIG.toolchains) }}"
@@ -158,37 +203,106 @@ jobs:
               toolchain_url=$(echo $toolchain | jq -r ".url")
               mkdir -p '$toolchain_name'
 
-              # Download archive
-              wget "$toolchain_url"
+              # Download archive with retry and progress
+              echo "📥 Downloading $toolchain_name from $toolchain_url"
+              wget --tries=3 --progress=bar:force "$toolchain_url" || curl -L -o "${toolchain_url##*/}" "$toolchain_url"
 
               # Get filename
               filename="${toolchain_url##*/}"
+              
+              # Verify file exists and has size
+              if [ ! -f "$filename" ]; then
+                echo "❌ Download failed: $filename not found"
+                exit 1
+              fi
+
+              file_size=$(stat -c%s "$filename" 2>/dev/null || stat -f%z "$filename" 2>/dev/null)
+              echo "📦 File size: $file_size bytes"
+
+              # Create destination directory
+              mkdir -p "$toolchain_name"
+
+              echo "🔍 File type: $(file "$filename" || echo "unknown")"
+
+              # Extract based on file type with better error handling
               case "$filename" in
                 *.zip)
-                  unzip -d $toolchain_name "$filename"
+                  echo "📦 Extracting ZIP: $filename"
+                  if unzip -l "$filename" > /dev/null 2>&1; then
+                    unzip -q -d "$toolchain_name" "$filename" || { echo "❌ ZIP extraction failed"; exit 1; }
+                  else
+                    echo "❌ ZIP file is corrupted"
+                    exit 1
+                  fi
                   ;;
                 *.tar)
-                  tar xvf "$filename" -C $toolchain_name
+                  echo "📦 Extracting TAR: $filename"
+                  if tar -tf "$filename" > /dev/null 2>&1; then
+                    tar xvf "$filename" -C "$toolchain_name" || { echo "❌ TAR extraction failed"; exit 1; }
+                  else
+                    echo "❌ TAR file is corrupted"
+                    exit 1
+                  fi
                   ;;
-                *.tar.gz)
-                  tar zxvf "$filename" -C $toolchain_name
+                *.tar.gz|*.tgz)
+                  echo "📦 Extracting TAR.GZ: $filename"
+                  if tar -tzf "$filename" > /dev/null 2>&1; then
+                    tar zxvf "$filename" -C "$toolchain_name" || { echo "❌ TAR.GZ extraction failed"; exit 1; }
+                  else
+                    echo "❌ TAR.GZ file is corrupted"
+                    exit 1
+                  fi
+                  ;;
+                *.tar.bz2)
+                  echo "📦 Extracting TAR.BZ2: $filename"
+                  if tar -tjf "$filename" > /dev/null 2>&1; then
+                    tar jxvf "$filename" -C "$toolchain_name" || { echo "❌ TAR.BZ2 extraction failed"; exit 1; }
+                  else
+                    echo "❌ TAR.BZ2 file is corrupted"
+                    exit 1
+                  fi
                   ;;
                 *.rar)
-                  unrar x "$filename" $toolchain_name
+                  echo "📦 Extracting RAR: $filename"
+                  if unrar t "$filename" > /dev/null 2>&1; then
+                    unrar x "$filename" "$toolchain_name" || { echo "❌ RAR extraction failed"; exit 1; }
+                  else
+                    echo "❌ RAR file is corrupted"
+                    exit 1
+                  fi
                   ;;
                 *)
-                  echo "unknown file type: $filename"
+                  echo "❌ Unknown file type: $filename"
+                  # Try to detect file type and extract accordingly
+                  file_type=$(file -b "$filename")
+                  echo "🔍 Detected file type: $file_type"
+                  if [[ "$file_type" == *"gzip compressed"* ]]; then
+                    echo "🔄 Attempting gzip extraction"
+                    tar zxvf "$filename" -C "$toolchain_name" || { echo "❌ Auto extraction failed"; exit 1; }
+                  elif [[ "$file_type" == *"tar archive"* ]]; then
+                    echo "🔄 Attempting tar extraction"
+                    tar xvf "$filename" -C "$toolchain_name" || { echo "❌ Auto extraction failed"; exit 1; }
+                  else
+                    echo "❌ Cannot determine extraction method"
+                    exit 1
+                  fi
                   ;;
               esac
-              # Delete file to avoid duplicate name conflicts 
-              rm $filename
 
-              echo "🤔 Download $toolchain_name => ($toolchain_url)"
+              # List extracted contents for debugging
+              echo "📁 Extracted contents:"
+              find "$toolchain_name" -type f -name "clang" -o -name "ld.lld" -o -name "llvm-ar" | head -10
+
+              # Delete file to avoid duplicate name conflicts 
+              rm "$filename"
+
+              echo "✅ Successfully downloaded and extracted $toolchain_name"
             else
               # If from git
               toolchain_repo=$(echo $toolchain | jq -r ".repo")
               toolchain_branch=$(echo $toolchain | jq -r ".branch")
-              git clone --recursive --depth=1 -j $(nproc) --branch $toolchain_branch $toolchain_repo $toolchain_name
+              echo "🔧 Cloning $toolchain_name from $toolchain_repo"
+              git clone --recursive --depth=1 -j $(nproc) --branch "$toolchain_branch" "$toolchain_repo" "$toolchain_name"
 
               echo "🤔 Clone $toolchain_name => ($toolchain_repo)"
             fi
